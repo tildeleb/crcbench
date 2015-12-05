@@ -1,14 +1,13 @@
-crcbench
-========
+#crcbench
 
 See the blog post here:
 [The Search For a Faster CRC32](https://blog.fastmail.com/2015/12/03/the-search-for-a-faster-crc32/)
 
-crcbench is a cc32 benchmarking program written in Go. There are currently 3 benchmarks.
+crcbench is a CRC32 benchmarking program written in Go. There are currently 3 benchmarks.
 
 1. `benchmark1` has the allocation of the CRC function using a sync.Pool outside loop.
 2. `benchmark2` has the allocation of the CRC function using a sync.Pool inside loop.
-3. `benchmark2` has the allocation of the CRC function using a sync.Pool inside loop and does two writes per iteration to simulate a database calculating checksum for a key and value.
+3. `benchmark2` has the allocation of the CRC function using a sync.Pool inside loop and does two writes per iteration to simulate a key/value database calculating the checksum for a key and value. The size of the writes for the key and value is half the total length.
 
 This code is based on `bench.c` from [crc32-bench](https://github.com/robn/crc32-bench) but was written from scratch in Go.
 
@@ -31,7 +30,7 @@ This code is based on `bench.c` from [crc32-bench](https://github.com/robn/crc32
 	  -z	all data is zero.
 
 
-###Sample output from MacBookPro Intel Core i7 2860QM 4 core @ 2.5 GHz
+###Sample output from a MacBookPro Intel Core i7 2860QM 4 core @ 2.5 GHz
 
 ####Go 1.5.1 using IEEE CRC from standard library (ieee)
 
