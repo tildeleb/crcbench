@@ -10,6 +10,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	kcrc32 "github.com/klauspost/crc32"
 	"hash"
 	"hash/crc32"
 	"math/rand"
@@ -20,7 +21,7 @@ import (
 )
 
 // flags
-var crc = flag.String("crc", "ieee", "ieee, castagnoli, koopman.")
+var crc = flag.String("crc", "ieee", "ieee, kieee, castagnoli, koopman.")
 var length = flag.Int("l", 16, "buffer length.")
 var n = flag.Int("n", 100*1000*1000, "number of rounds.")
 var af = flag.Bool("a", false, "run all benchmarks.")
@@ -41,9 +42,9 @@ type BenchmarkConfig struct {
 
 // A Benchmark is a function that runs the benchmark, a header to print, and a bool if we should run it.
 type Benchmark struct {
-	Benchmark func(l, n int) (sum uint32, run float64, avg float64) // method value
-	H1Header  string                                                // print header before benchmark
-	Run       bool                                                  // true if running this benchmark
+	Benchmark func(l, n int) (sum uint32, datalen, run, avg float64) // method value
+	H1Header  string                                                 // print header before benchmark
+	Run       bool                                                   // true if running this benchmark
 }
 
 // The State for a benchmark is a buffer and a sync.Pool for the crc.
@@ -89,6 +90,8 @@ func rbetween(a int, b int) int {
 // GetCRC returns a sync.Pool for the specified crc.
 func GetCRC(crc string) sync.Pool {
 	switch crc {
+	case "kieee":
+		return sync.Pool{New: func() interface{} { return kcrc32.NewIEEE() }}
 	case "ieee":
 		return sync.Pool{New: func() interface{} { return crc32.NewIEEE() }}
 	case "castagnoli":
@@ -99,9 +102,10 @@ func GetCRC(crc string) sync.Pool {
 	panic("unknown crc: " + crc)
 }
 
-// H2Header prints the results for each benchmark
-func H2Header(length, n int) {
-	fmt.Printf("\t%H, %h: ", hrff.Int{length, "B"}, hrff.Int{n, "rounds"})
+// H2Header prints the results for each benchmark and returns the datalen
+func H2Header(length, n int) float64 {
+	fmt.Printf("\t%H, %h:\t", hrff.Int{length, "B"}, hrff.Int{n, "rounds"})
+	return float64(length * n)
 }
 
 func (s *State) FillBuffer(length int) {
@@ -112,8 +116,8 @@ func (s *State) FillBuffer(length int) {
 	}
 }
 
-func (s *State) Benchmark1(length, n int) (sum uint32, run float64, avg float64) {
-	H2Header(length, n)
+func (s *State) Benchmark1(length, n int) (sum uint32, datalen, run, avg float64) {
+	datalen = H2Header(length, n)
 	s.FillBuffer(length)
 	crc := s.CRC32Pool.Get().(hash.Hash32)
 	beg := time.Now()
@@ -131,8 +135,8 @@ func (s *State) Benchmark1(length, n int) (sum uint32, run float64, avg float64)
 	return
 }
 
-func (s *State) Benchmark2(length, n int) (sum uint32, run float64, avg float64) {
-	H2Header(length, n)
+func (s *State) Benchmark2(length, n int) (sum uint32, datalen, run, avg float64) {
+	datalen = H2Header(length, n)
 	s.FillBuffer(length)
 	beg := time.Now()
 	for i := 0; i < n; i++ {
@@ -150,8 +154,8 @@ func (s *State) Benchmark2(length, n int) (sum uint32, run float64, avg float64)
 	return
 }
 
-func (s *State) Benchmark3(length, n int) (sum uint32, run float64, avg float64) {
-	H2Header(length, n)
+func (s *State) Benchmark3(length, n int) (sum uint32, datalen, run, avg float64) {
+	datalen = H2Header(length, n)
 	s.FillBuffer(length)
 	key := s.Buf[0 : length/2]
 	val := s.Buf[length/2 : length]
@@ -176,8 +180,9 @@ func (s *State) Benchmark3(length, n int) (sum uint32, run float64, avg float64)
 }
 
 func main() {
-	var print = func(sum uint32, run float64, avg float64) {
-		fmt.Printf("crc=%#x, runtime=%0.2f secs, avg=%0.2h\n", sum, run, hrff.Float64{avg, "secs"})
+	var print = func(sum uint32, datalen, run, avg float64) {
+		fmt.Printf("crc=%#08x, runtime=%0.2f secs, avg=%0.2h, rate=%0.2h\n",
+			sum, run, hrff.Float64{avg, "secs"}, hrff.Float64{datalen / run, "B/sec"})
 	}
 	flag.Parse()
 	if *af {
